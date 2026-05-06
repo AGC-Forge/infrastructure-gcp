@@ -463,7 +463,7 @@ services:
     restart: unless-stopped
     volumes:
       - dovecot_mail:/var/mail
-      - ./docker/dovecot/conf:/etc/dovecot:ro
+      - ./docker/dovecot/conf:/etc/dovecot
       - ./docker/mail/tls/mailserver.crt:/etc/ssl/certs/mailserver.crt:ro
       - ./docker/mail/tls/mailserver.key:/etc/ssl/private/mailserver.key:ro
       - ./docker/dovecot/dovecot-ssl.conf:/etc/dovecot/conf.d/10-ssl.conf:ro
