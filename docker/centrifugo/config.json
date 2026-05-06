@@ -1,0 +1,109 @@
+{
+  "token_hmac_secret_key": "WFSDqzDOSuNGKfGSbfS8nQo70xE3fzgUDjAVifClfXDfWCFx6s+8z0ZL0nXrajkfdRLPHqsk1uWnTRoGYiNKKw==",
+  "api_key": "gb9zqPg7Kz3ZC/PN5+9QXGpnS9pTuRHmtpXKAuv9CoP5y7Ct8pfMidCg5nincUW8+CYGTGzHMT9XEUdDrkoxzg==",
+  "admin_password": "e719c4fd37a4bd28b08fc8e58373bcfa8804dd6c53fd20062b38ce45041fba23",
+  "admin_secret": "3u/gFCBdN96luQZ9TbPXWe4+Jc7tFpxMvkGuA4PXPA1hOyD7ZgMpMgzX5IZGkpwFMw6a64/qa9/UTPYkIbGFYA==",
+  "admin": true,
+  "admin_insecure": false,
+  "engine": "redis",
+  "redis_address": "infrastructure_redis:6379",
+  "redis_password": "87a91c115fb6904a34b8fc9659eb1e4fb987e092ff2b4cc36b0c30312a2ef121",
+  "redis_db": 0,
+  "allowed_origins": [
+    "null"
+  ],
+  "namespaces": [
+    {
+      "name": "chat",
+      "presence": true,
+      "join_leave": true,
+      "history_size": 100,
+      "history_ttl": "24h"
+    },
+    {
+      "name": "notifications",
+      "history_size": 50,
+      "history_ttl": "12h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "allow_history_for_client": true,
+      "allow_subscribe_for_anonymous": false,
+      "force_recovery": true,
+      "force_positioning": false
+    },
+    {
+      "name": "presence",
+      "presence": true,
+      "join_leave": true
+    },
+    {
+      "name": "typing",
+      "history_size": 0
+    },
+    {
+      "name": "alerts",
+      "history_size": 100,
+      "history_ttl": "168h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "allow_history_for_client": true,
+      "allow_subscribe_for_anonymous": false,
+      "force_recovery": true,
+      "force_positioning": false
+    },
+    {
+      "name": "broadcast",
+      "history_size": 50,
+      "history_ttl": "24h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "allow_history_for_client": true,
+      "allow_subscribe_for_anonymous": false,
+      "force_recovery": true,
+      "force_positioning": false
+    },
+    {
+      "name": "announcements",
+      "history_size": 200,
+      "history_ttl": "720h"
+    },
+    {
+      "name": "system_events",
+      "history_size": 500,
+      "history_ttl": "168h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": false,
+      "allow_history_for_client": true,
+      "allow_subscribe_for_anonymous": false,
+      "force_recovery": true,
+      "force_positioning": false
+    },
+    {
+      "name": "user_status",
+      "presence": true,
+      "join_leave": true
+    },
+    {
+      "name": "download",
+      "presence": true,
+      "history_size": 100,
+      "history_ttl": "1h",
+      "allow_subscribe_for_client": true,
+      "allow_publish_for_client": true,
+      "allow_history_for_client": true,
+      "allow_subscribe_for_anonymous": true,
+      "force_recovery": true,
+      "force_positioning": true
+    }
+  ],
+  "channel_prefix_private": true,
+  "channel_private_prefix": "$",
+  "channel_user_bound": true,
+  "user_subscribe_to_personal": true,
+  "log_level": "debug",
+  "health": true,
+  "prometheus": true,
+  "grpc_api": {
+    "bind": "0.0.0.0:10000"
+  }
+}

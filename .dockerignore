@@ -1,0 +1,55 @@
+# Docker ignore patterns
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Source files
+*.ts
+*.tsx
+*.js
+*.jsx
+*.py
+*.sh
+# Dockerfile*
+# docker-compose*.yml
+
+# IDE
+.vscode/
+.idea/
+.editorconfig
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Dependencies
+node_modules/
+venv/
+.npm/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sql
+*.dump
+
+# Temporary
+tmp/
+temp/
+.tmp/

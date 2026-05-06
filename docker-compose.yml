@@ -1,0 +1,589 @@
+# version: "3.8"
+
+services:
+  # Object Storage Service (MinIO)
+  minio:
+    image: minio/minio:latest
+    container_name: infrastructure_minio
+    restart: always
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+      MINIO_BROWSER_REDIRECT_URL: https://console-storage.localtunnel.it.com
+      MINIO_SERVER_URL: https://api-storage.localtunnel.it.com
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - infrastructure-network
+      - shared-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: infrastructure_redis
+    restart: always
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --tls-port 6380
+      --port 0
+      --tls-cert-file /tls/redis.crt
+      --tls-key-file /tls/redis.key
+      --tls-ca-cert-file /tls/ca.crt
+      --tls-auth-clients no
+    ports:
+      - "127.0.0.1:6380:6380"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/tls:/tls:ro
+    networks:
+      - infrastructure-network
+      - shared-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "--tls",
+          "--insecure",
+          "-a",
+          "${REDIS_PASSWORD}",
+          "--raw",
+          "incr",
+          "ping",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    container_name: infrastructure_centrifugo
+    restart: always
+    command: ["centrifugo", "--config=/centrifugo/config.json"]
+    volumes:
+      - ./docker/centrifugo/config.json:/centrifugo/config.json:ro
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+  postgres:
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile.postgres
+    container_name: infrastructure_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-infrastructure}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-Secret#2305}
+      POSTGRES_DB: ${DB_NAME:-infrastructure_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      LANG: en_US.utf8
+      LC_ALL: en_US.utf8
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/scripts:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres/tls:/tls:ro
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    networks:
+      - infrastructure-network
+      - shared-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USER:-infrastructure} -d ${DB_NAME:-infrastructure_db}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+      -c ssl=on
+      -c ssl_cert_file=/tls/server.crt
+      -c ssl_key_file=/tls/server.key
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: infrastructure_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin123}
+      PGADMIN_LISTEN_PORT: 5050
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "True"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "127.0.0.1:5050:5050"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      - postgres
+
+  3proxy:
+    build:
+      context: ./
+      dockerfile: docker/3proxy/Dockerfile
+    container_name: infrastructure_3proxy
+    restart: unless-stopped
+    expose:
+      - "3129"
+      - "1080"
+    environment:
+      PROXY_LOGIN: ${3PROXY_PROXY_LOGIN:-admin}
+      PROXY_PASSWORD: ${3PROXY_PROXY_PASSWORD:-password}
+      PROXY_PORT: ${3PROXY_PROXY_PORT:-3129}
+      SOCKS_PORT: ${3PROXY_SCKS_PORT:-1080}
+      PRIMARY_RESOLVER: ${3PROXY_PRIMARY_RESOLVER:-8.8.8.8}
+      SECONDARY_RESOLVER: ${3PROXY_SECONDARY_RESOLVER:-1.1.1.1}
+      MAX_CONNECTIONS: ${3PROXY_MAX_CONNECTIONS:-1024}
+    volumes:
+      - ./docker/3proxy/logs:/var/log/3proxy
+      - ./docker/3proxy/config:/etc/3proxy
+      - ./docker/3proxy/entrypoint.sh:/entrypoint.sh:ro
+    networks:
+      - infrastructure-network
+      - shared-network
+    cap_add:
+      - NET_ADMIN
+    entrypoint: ["/entrypoint.sh"]
+    command: ["3proxy", "/etc/3proxy/3proxy.cfg"]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.tcp.routers.proxy-http.rule=HostSNI(`proxy.local.yourdomain.com`)"
+      - "traefik.tcp.routers.proxy-http.entrypoints=websecure"
+      - "traefik.tcp.routers.proxy-http.tls=true"
+      - "traefik.tcp.routers.proxy-http.service=proxy-http"
+      - "traefik.tcp.services.proxy-http.loadbalancer.server.port=3129"
+      - "traefik.tcp.routers.proxy-socks.rule=HostSNI(`socks.local.yourdomain.com`)"
+      - "traefik.tcp.routers.proxy-socks.entrypoints=websecure"
+      - "traefik.tcp.routers.proxy-socks.tls=true"
+      - "traefik.tcp.routers.proxy-socks.service=proxy-socks"
+      - "traefik.tcp.services.proxy-socks.loadbalancer.server.port=1080"
+
+  # Supabase Stack
+  supabase-kong:
+    image: kong:2.8.1
+    container_name: infrastructure_kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+    volumes:
+      - ./docker/supabase/kong/kong.yml:/var/lib/kong/kong.yml:ro
+    ports:
+      - "127.0.0.1:8001:8000"
+      - "127.0.0.1:8443:8443"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      supabase-analytics:
+        condition: service_healthy
+
+  supabase-auth:
+    image: supabase/gotrue:v2.132.3
+    container_name: infrastructure_gotrue
+    restart: unless-stopped
+    environment:
+      # Core Config
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${SUPABASE_PUBLIC_URL}
+      GOTRUE_SITE_URL: ${SUPABASE_PUBLIC_URL}
+      # Database Connection
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${DB_USER:-infrastructure}:${DB_PASSWORD:-Secret#2305}@postgres:5432/${DB_NAME:-infrastructure_db}?sslmode=disable
+      # JWT Configuration
+      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      # Auth Features
+      GOTRUE_DISABLE_SIGNUP: "false"
+      # ========================
+      # SMTP CONFIGURATION
+      # Get Mail Server Internal (Postfix)
+      # ========================
+      GOTRUE_SMTP_HOST: ${SUPABASE_SMTP_HOST:-postfix}
+      GOTRUE_SMTP_PORT: ${SUPABASE_SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SUPABASE_SMTP_USER:-noreply@yourdomain.com}
+      GOTRUE_SMTP_PASS: ${SUPABASE_SMTP_PASS:-StrongSMTPPassword123!}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SUPABASE_ADMIN_EMAIL:-noreply@yourdomain.com}
+      GOTRUE_SMTP_SENDER_NAME: ${SUPABASE_SENDER_NAME:-Your App Notification}
+      GOTRUE_SMTP_MAX_FREQUENCY: 60s # Rate limiting
+      # Email Templates & Settings
+      GOTRUE_MAILER_AUTOCONFIRM: ${GOTRUE_MAILER_AUTOCONFIRM:-false}
+      GOTRUE_MAILER_SECURE_EMAIL_CHANGE_ENABLED: "true"
+      GOTRUE_MAILER_OTP_LENGTH: 6
+      GOTRUE_MAILER_OTP_EXP: 3600
+      # URL Paths for Email Templates
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_INVITE: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_CONFIRM: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: "/auth/v1/verify"
+      GOTRUE_MAILER_URLPATHS_RECOVERY: "/auth/v1/verify"
+      # Subject Lines (Customizable)
+      GOTRUE_MAILER_SUBJECTS_CONFIRMATION: ${GOTRUE_MAILER_SUBJECTS_CONFIRMATION:-"Confirm Your Email"}
+      GOTRUE_MAILER_SUBJECTS_RECOVERY: ${GOTRUE_MAILER_SUBJECTS_RECOVERY:-"Reset Your Password"}
+      GOTRUE_MAILER_SUBJECTS_EMAIL_CHANGE: ${GOTRUE_MAILER_SUBJECTS_EMAIL_CHANGE:-"Confirm Email Change"}
+      GOTRUE_MAILER_SUBJECTS_INVITE: ${GOTRUE_MAILER_SUBJECTS_INVITE:-"You've Been Invited"}
+      GOTRUE_MAILER_SUBJECTS_MAGIC_LINK: ${GOTRUE_MAILER_SUBJECTS_MAGIC_LINK:-"Your Magic Login Link"}
+      # Custom Email Templates (Optional)
+      GOTRUE_MAILER_TEMPLATES_CONFIRMATION: ""
+      GOTRUE_MAILER_TEMPLATES_RECOVERY: ""
+      GOTRUE_MAILER_TEMPLATES_MAGIC_LINK: ""
+      GOTRUE_MAILER_TEMPLATES_EMAIL_CHANGE: ""
+      GOTRUE_MAILER_TEMPLATES_INVITE: ""
+      # Logging
+      GOTRUE_LOG_LEVEL: info
+      GOTRUE_LOG_FORMAT: json
+      # Security
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_EXTERNAL_EMAIL_TEMPLATE: ""
+
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postfix:
+        condition: service_started
+    command: ["gotrue"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9999/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  supabase-rest:
+    image: postgrest/postgrest:v12.0.1
+    container_name: infrastructure_postgrest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://${DB_USER:-infrastructure}:${DB_PASSWORD:-Secret#2305}@postgres:5432/${DB_NAME:-infrastructure_db}
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  supabase-realtime:
+    image: supabase/realtime:v2.25.50
+    container_name: infrastructure_realtime
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-infrastructure}
+      DB_PASSWORD: ${DB_PASSWORD:-Secret#2305}
+      DB_NAME: ${DB_NAME:-infrastructure_db}
+      DB_SSL: "false"
+      SLOT_NAME: supabase_realtime_replication_slot
+      SECURE_CHANNELS: "true"
+      JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      REPLICATION_MODE: RLS
+      REPLICATION_POLL_INTERVAL: 100
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  supabase-storage:
+    image: supabase/storage-api:v0.46.4
+    container_name: infrastructure_storage
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${SUPABASE_ANON_KEY}
+      SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      POSTGREST_URL: http://supabase-rest:3000
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET}
+      DATABASE_URL: postgres://${DB_USER:-infrastructure}:${DB_PASSWORD:-Secret#2305}@postgres:5432/${DB_NAME:-infrastructure_db}
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_BUCKET: ${SUPABASE_STORAGE_BUCKET:-your-bucket}
+      GLOBAL_S3_ENDPOINT: http://minio:9000
+      GLOBAL_S3_PROTOCOL: http
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY}
+      AWS_DEFAULT_REGION: us-east-1
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: us-east-1
+    volumes:
+      - supabase_storage_data:/var/lib/storage
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      minio:
+        condition: service_started
+      supabase-rest:
+        condition: service_started
+
+  supabase-analytics:
+    image: supabase/logflare:1.4.0
+    container_name: infrastructure_analytics
+    restart: unless-stopped
+    environment:
+      LOGFLARE_NODE_HOST: 127.0.0.1
+      LOGFLARE_PORT: 4000
+      DB_USERNAME: ${DB_USER:-infrastructure}
+      DB_PASSWORD: ${DB_PASSWORD:-Secret#2305}
+      DB_DATABASE: ${DB_NAME:-infrastructure_db}
+      DB_HOSTNAME: postgres
+      DB_PORT: 5432
+      DB_SCHEMA: _analytics
+    ports:
+      - "127.0.0.1:4000:4000"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  supabase-studio:
+    image: supabase/studio:2024.01.04
+    container_name: infrastructure_studio
+    restart: unless-stopped
+    environment:
+      STUDIO_PG_META_URL: http://supabase-rest:3000
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-Secret#2305}
+      DEFAULT_ORGANIZATION_NAME: ${SUPABASE_ORG_NAME:-MyOrg}
+      DEFAULT_PROJECT_NAME: ${SUPABASE_PROJECT_NAME:-MyProject}
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      - supabase-kong
+
+  # Mail Transfer Agent - Postfix
+  postfix:
+    image: boky/postfix:latest
+    container_name: infrastructure_postfix
+    restart: unless-stopped
+    hostname: ${MAIL_HOSTNAME:-mail.local.yourdomain.com}
+    environment:
+      ALLOWED_SENDER_DOMAINS: ${MAIL_DOMAINS:-yourdomain.com}
+      SMTP_USER: ${SMTP_USER:-noreply@yourdomain.com}
+      SMTP_PASS: ${SMTP_PASS:-ChangeMe123!}
+      RELAY_HOST: ""
+      MESSAGE_SIZE_LIMIT: 26214400
+    ports:
+      - "127.0.0.1:25:25"
+      - "127.0.0.1:587:587"
+    volumes:
+      - postfix_data:/var/spool/postfix
+      - ./docker/postfix/conf:/etc/postfix:ro
+    networks:
+      - infrastructure-network
+      - shared-network
+    healthcheck:
+      test: ["CMD", "postfix", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # IMAP Server - Dovecot
+  dovecot:
+    image: dovecot/dovecot:2.3.21
+    container_name: infrastructure_dovecot
+    restart: unless-stopped
+    volumes:
+      - dovecot_mail:/var/mail
+      - ./docker/dovecot/conf:/etc/dovecot:ro
+      - ./docker/dovecot/dovecot-ssl.conf:/etc/dovecot/dovecot-ssl.conf:ro
+    ports:
+      - "127.0.0.1:143:143"
+      - "127.0.0.1:993:993"
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      - postfix
+
+  # Administrator Email Panel
+  postfixadmin:
+    image: postfixadmin/postfixadmin:latest
+    container_name: infrastructure_postfixadmin
+    restart: unless-stopped
+    environment:
+      POSTFIXADMIN_DB_TYPE: mysqli
+      POSTFIXADMIN_DB_HOST: ${MAIL_DB_HOST:-postgres}
+      POSTFIXADMIN_DB_USER: ${DB_USER:-infrastructure}
+      POSTFIXADMIN_DB_PASSWORD: ${DB_PASSWORD:-Secret#2305}
+      POSTFIXADMIN_DB_NAME: ${MAIL_DB_NAME:-mailserver_db}
+      POSTFIXADMIN_SETUP_PASSWORD: ${MAIL_SETUP_PASSWORD:-AdminMailSetup123!}
+      POSTFIXADMIN_SMTP_SERVER: postfix
+      POSTFIXADMIN_SMTP_PORT: 25
+      POSTFIXADMIN_DEFAULT_ALIASES: |
+        postmaster: ${SMTP_USER:-noreply@yourdomain.com}
+        abuse: ${SMTP_USER:-noreply@yourdomain.com}
+    ports:
+      - "127.0.0.1:8085:80"
+    volumes:
+      - postfixadmin_data:/var/www/html
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Webmail Client - Roundcube
+  roundcube:
+    image: roundcube/roundcubemail:latest
+    container_name: infrastructure_roundcube
+    restart: unless-stopped
+    environment:
+      ROUNDCUBEMAIL_DB_TYPE: pgsql
+      ROUNDCUBEMAIL_DB_HOST: postgres
+      ROUNDCUBEMAIL_DB_USER: ${DB_USER:-infrastructure}
+      ROUNDCUBEMAIL_DB_PASSWORD: ${DB_PASSWORD:-Secret#2305}
+      ROUNDCUBEMAIL_DB_NAME: ${ROUNDCUBE_DB_NAME:-roundcube_db}
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://dovecot
+      ROUNDCUBEMAIL_DEFAULT_PORT: 993
+      ROUNDCUBEMAIL_SMTP_SERVER: tls://postfix
+      ROUNDCUBEMAIL_SMTP_PORT: 587
+      ROUNDCUBEMAIL_SKIN: elastic
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,managesieve,password
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
+      ROUNDCUBEMAIL_REQUEST_PATH: /webmail
+    ports:
+      - "127.0.0.1:8086:80"
+    volumes:
+      - roundcube_data:/var/roundcube/db
+      - roundcube_plugins:/var/roundcube/plugins
+    networks:
+      - infrastructure-network
+      - shared-network
+    depends_on:
+      - postfix
+      - dovecot
+
+  # Mail Antivirus & Spam Filter
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: infrastructure_rspamd
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11332:11332"
+      - "127.0.0.1:11333:11333"
+      - "127.0.0.1:11334:11334"
+    volumes:
+      - rspamd_data:/var/lib/rspamd
+      - ./docker/rspamd/conf:/etc/rspamd:ro
+    networks:
+      - infrastructure-network
+      - shared-network
+    environment:
+      RSPAMD_password: ${RSPAMD_PASSWORD:-RspamdControl789}
+    depends_on:
+      - postfix
+      - redis
+
+  # Mail Queue Manager
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: infrastructure_mailhog
+    restart: unless-stopped
+    environment:
+      MH_STORAGE: maildir
+      MH_MAILDIR_PATH: /maildir
+    ports:
+      - "127.0.0.1:1025:1025" # SMTP untuk development
+      - "127.0.0.1:8025:8025" # Web UI
+    volumes:
+      - mailhog_data:/maildir
+    networks:
+      - infrastructure-network
+      - shared-network
+
+networks:
+  infrastructure-network:
+    driver: bridge
+    name: infrastructure-network
+
+  shared-network:
+    driver: bridge
+    name: shared-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  pgadmin_data:
+  supabase_storage_data:
+  postfix_data:
+  dovecot_mail:
+  postfixadmin_data:
+  roundcube_data:
+  roundcube_plugins:
+  rspamd_data:
+  mailhog_data:

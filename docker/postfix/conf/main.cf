@@ -1,0 +1,36 @@
+# Basic configuration
+myhostname = mail.localtunnel.it.com
+mydomain = localtunnel.it.com
+myorigin = $mydomain
+mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain
+mynetworks = 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+
+# SMTP Authentication
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = inet:dovecot:12345
+smtpd_sasl_auth_enable = yes
+smtpd_tls_auth_only = yes
+smtpd_recipient_restrictions = 
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_unauth_destination
+
+# TLS Configuration
+smtpd_tls_cert_file = /etc/ssl/certs/mailserver.crt
+smtpd_tls_key_file = /etc/ssl/private/mailserver.key
+smtpd_use_tls = yes
+smtpd_tls_security_level = may
+smtp_tls_security_level = may
+
+# Mail size
+message_size_limit = 26214400
+mailbox_size_limit = 0
+
+# Rspamd integration
+milter_default_action = accept
+milter_protocol = 6
+smtpd_milters = inet:rspamd:11332
+non_smtpd_milters = inet:rspamd:11332
+
+# Logging
+maillog_file = /var/log/maillog
