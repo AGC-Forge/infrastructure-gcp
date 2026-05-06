@@ -39,18 +39,18 @@ Options:
   -h, --help             Show this help.
 
 Environment overrides:
-  LETSENCRYPT_EMAIL=admin@example.com
-  BASE_DOMAIN=example.com
-  MINIO_API_DOMAIN=api-storage.example.com
-  MINIO_CONSOLE_DOMAIN=console-storage.example.com
-  CENTRIFUGO_DOMAIN=websocket.example.com
-  PGADMIN_DOMAIN=pgadmin.example.com
-  SUPABASE_API_DOMAIN=api-supabase.example.com
-  SUPABASE_STUDIO_DOMAIN=studio-supabase.example.com
-  SUPABASE_REALTIME_DOMAIN=realtime-supabase.example.com
-  MAILADMIN_DOMAIN=mailadmin.example.com
-  WEBMAIL_DOMAIN=webmail.example.com
-  MAIL_HOSTNAME=mail.example.com
+  LETSENCRYPT_EMAIL=superadmin@localtunnel.it.com
+  BASE_DOMAIN=localtunnel.it.com
+  MINIO_API_DOMAIN=api-storage.localtunnel.it.com
+  MINIO_CONSOLE_DOMAIN=console-storage.localtunnel.it.com
+  CENTRIFUGO_DOMAIN=websocket.localtunnel.it.com
+  PGADMIN_DOMAIN=pgadmin.localtunnel.it.com
+  SUPABASE_API_DOMAIN=api-supabase.localtunnel.it.com
+  SUPABASE_STUDIO_DOMAIN=studio-supabase.localtunnel.it.com
+  SUPABASE_REALTIME_DOMAIN=realtime-supabase.localtunnel.it.com
+  MAILADMIN_DOMAIN=mailadmin.localtunnel.it.com
+  WEBMAIL_DOMAIN=webmail.localtunnel.it.com
+  MAIL_HOSTNAME=mail.localtunnel.it.com
   USE_PUBLIC_MAIL_CERT=true
 EOF
 }

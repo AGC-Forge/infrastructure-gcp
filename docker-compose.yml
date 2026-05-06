@@ -3,6 +3,9 @@
 services:
   # Object Storage Service (MinIO)
   minio:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: minio/minio:latest
     container_name: infrastructure_minio
     restart: always
@@ -22,6 +25,9 @@ services:
       - shared-network
 
   redis:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: redis:7-alpine
     container_name: infrastructure_redis
     restart: always
@@ -71,6 +77,9 @@ services:
           memory: 512M
 
   centrifugo:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: centrifugo/centrifugo:v5
     container_name: infrastructure_centrifugo
     restart: always
@@ -103,6 +112,8 @@ services:
     build:
       context: .
       dockerfile: docker/postgres/Dockerfile.postgres
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     container_name: infrastructure_postgres
     restart: unless-stopped
     environment:
@@ -140,6 +151,9 @@ services:
       -c ssl_key_file=/tls/server.key
 
   pgadmin:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: dpage/pgadmin4:latest
     container_name: infrastructure_pgadmin
     restart: unless-stopped
@@ -163,19 +177,21 @@ services:
     build:
       context: ./
       dockerfile: docker/3proxy/Dockerfile
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     container_name: infrastructure_3proxy
     restart: unless-stopped
     expose:
       - "3129"
       - "1080"
     environment:
-      PROXY_LOGIN: ${3PROXY_PROXY_LOGIN:-admin}
-      PROXY_PASSWORD: ${3PROXY_PROXY_PASSWORD:-password}
-      PROXY_PORT: ${3PROXY_PROXY_PORT:-3129}
-      SOCKS_PORT: ${3PROXY_SCKS_PORT:-1080}
-      PRIMARY_RESOLVER: ${3PROXY_PRIMARY_RESOLVER:-8.8.8.8}
-      SECONDARY_RESOLVER: ${3PROXY_SECONDARY_RESOLVER:-1.1.1.1}
-      MAX_CONNECTIONS: ${3PROXY_MAX_CONNECTIONS:-1024}
+      PROXY_LOGIN: "${PROXY_LOGIN:-admin}"
+      PROXY_PASSWORD: "${PROXY_PASSWORD:-password}"
+      PROXY_PORT: "${PROXY_PORT:-3129}"
+      SOCKS_PORT: "${PROXY_SCKS_PORT:-1080}"
+      PRIMARY_RESOLVER: "${PROXY_PRIMARY_RESOLVER:-8.8.8.8}"
+      SECONDARY_RESOLVER: "${PROXY_SECONDARY_RESOLVER:-1.1.1.1}"
+      MAX_CONNECTIONS: "${PROXY_MAX_CONNECTIONS:-1024}"
     volumes:
       - ./docker/3proxy/logs:/var/log/3proxy
       - ./docker/3proxy/config:/etc/3proxy
@@ -202,6 +218,9 @@ services:
 
   # Supabase Stack
   supabase-kong:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: kong:2.8.1
     container_name: infrastructure_kong
     restart: unless-stopped
@@ -225,6 +244,9 @@ services:
         condition: service_healthy
 
   supabase-auth:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: supabase/gotrue:v2.132.3
     container_name: infrastructure_gotrue
     restart: unless-stopped
@@ -302,6 +324,9 @@ services:
       retries: 5
 
   supabase-rest:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: postgrest/postgrest:v12.0.1
     container_name: infrastructure_postgrest
     restart: unless-stopped
@@ -319,6 +344,9 @@ services:
         condition: service_healthy
 
   supabase-realtime:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: supabase/realtime:v2.25.50
     container_name: infrastructure_realtime
     restart: unless-stopped
@@ -343,6 +371,9 @@ services:
         condition: service_healthy
 
   supabase-storage:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: supabase/storage-api:v0.46.4
     container_name: infrastructure_storage
     restart: unless-stopped
@@ -376,6 +407,9 @@ services:
         condition: service_started
 
   supabase-analytics:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: supabase/logflare:1.4.0
     container_name: infrastructure_analytics
     restart: unless-stopped
@@ -403,7 +437,10 @@ services:
       retries: 5
 
   supabase-studio:
-    image: supabase/studio:2024.01.04
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
+    image: supabase/studio:2026.04.27-sha-5f60601
     container_name: infrastructure_studio
     restart: unless-stopped
     environment:
@@ -425,6 +462,9 @@ services:
 
   # Mail Transfer Agent - Postfix
   postfix:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: boky/postfix:latest
     container_name: infrastructure_postfix
     restart: unless-stopped
@@ -454,6 +494,9 @@ services:
 
   # IMAP Server - Dovecot
   dovecot:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: dovecot/dovecot:2.3.21
     container_name: infrastructure_dovecot
     restart: unless-stopped
@@ -474,7 +517,10 @@ services:
 
   # Administrator Email Panel
   postfixadmin:
-    image: postfixadmin/postfixadmin:latest
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
+    image: postfixadmin:latest
     container_name: infrastructure_postfixadmin
     restart: unless-stopped
     environment:
@@ -502,6 +548,9 @@ services:
 
   # Webmail Client - Roundcube
   roundcube:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: roundcube/roundcubemail:latest
     container_name: infrastructure_roundcube
     restart: unless-stopped
@@ -533,6 +582,9 @@ services:
 
   # Mail Antivirus & Spam Filter
   rspamd:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: rspamd/rspamd:latest
     container_name: infrastructure_rspamd
     restart: unless-stopped
@@ -554,6 +606,9 @@ services:
 
   # Mail Queue Manager
   mailhog:
+    build:
+      args:
+        - "BUILDKIT_INLINE_CACHE=1"
     image: mailhog/mailhog:latest
     container_name: infrastructure_mailhog
     restart: unless-stopped
