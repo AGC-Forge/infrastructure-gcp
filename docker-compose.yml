@@ -162,48 +162,18 @@ services:
       - postgres
 
   3proxy:
-    build:
-      context: ./
-      dockerfile: docker/3proxy/Dockerfile
-      args:
-        - "BUILDKIT_INLINE_CACHE=1"
+    image: ghcr.io/3proxy/3proxy:latest # Official multi-arch image
     container_name: infrastructure_3proxy
     restart: unless-stopped
-    expose:
-      - "3129"
-      - "1080"
-    environment:
-      PROXY_LOGIN: "${PROXY_LOGIN:-admin}"
-      PROXY_PASSWORD: "${PROXY_PASSWORD:-password}"
-      PROXY_PORT: "${PROXY_PORT:-3129}"
-      SOCKS_PORT: "${PROXY_SCKS_PORT:-1080}"
-      PRIMARY_RESOLVER: "${PROXY_PRIMARY_RESOLVER:-8.8.8.8}"
-      SECONDARY_RESOLVER: "${PROXY_SECONDARY_RESOLVER:-1.1.1.1}"
-      MAX_CONNECTIONS: "${PROXY_MAX_CONNECTIONS:-1024}"
+    ports:
+      - "127.0.0.1:3129:3129"
+      - "127.0.0.1:1080:1080"
     volumes:
+      - ./docker/3proxy/config/3proxy.cfg:/etc/3proxy/3proxy.cfg:ro
       - ./docker/3proxy/logs:/var/log/3proxy
-      - ./docker/3proxy/config:/etc/3proxy
-      - ./docker/3proxy/entrypoint.sh:/entrypoint.sh:ro
     networks:
       - infrastructure-network
       - shared-network
-    cap_add:
-      - NET_ADMIN
-    user: root
-    entrypoint: ["/bin/sh", "/entrypoint.sh"]
-    command: ["3proxy", "/etc/3proxy/3proxy.cfg"]
-    labels:
-      - "traefik.enable=true"
-      - "traefik.tcp.routers.proxy-http.rule=HostSNI(`proxy.local.yourdomain.com`)"
-      - "traefik.tcp.routers.proxy-http.entrypoints=websecure"
-      - "traefik.tcp.routers.proxy-http.tls=true"
-      - "traefik.tcp.routers.proxy-http.service=proxy-http"
-      - "traefik.tcp.services.proxy-http.loadbalancer.server.port=3129"
-      - "traefik.tcp.routers.proxy-socks.rule=HostSNI(`socks.local.yourdomain.com`)"
-      - "traefik.tcp.routers.proxy-socks.entrypoints=websecure"
-      - "traefik.tcp.routers.proxy-socks.tls=true"
-      - "traefik.tcp.routers.proxy-socks.service=proxy-socks"
-      - "traefik.tcp.services.proxy-socks.loadbalancer.server.port=1080"
 
   # Supabase Stack
   supabase-kong:
