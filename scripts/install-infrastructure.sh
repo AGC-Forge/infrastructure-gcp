@@ -252,6 +252,22 @@ EOF
 
   cp "$LOCAL_CERT_DIR/ca.crt" "$LOCAL_CERT_DIR/infrastructure-local-ca.crt"
   ok "Local project CA ready: $LOCAL_CERT_DIR/infrastructure-local-ca.crt"
+
+  if [[ ! -f docker/dovecot/dovecot-ssl.conf ]]; then
+    cat > docker/dovecot/dovecot-ssl.conf <<'EOF'
+ssl = required
+ssl_cert = </etc/ssl/certs/mailserver.crt
+ssl_key = </etc/ssl/private/mailserver.key
+ssl_min_protocol = TLSv1.2
+ssl_cipher_list = ALL:!LOW:!SSLv2:!EXP:!aNULL
+ssl_prefer_server_ciphers = yes
+EOF
+  fi
+
+  mkdir -p docker/mail/tls
+  if [[ -f docker/mail/tls/mailserver.crt ]]; then
+    cp docker/mail/tls/mailserver.crt docker/mail/tls/mailserver.pem 2>/dev/null || true
+  fi
 }
 
 install_nginx_challenge_config() {

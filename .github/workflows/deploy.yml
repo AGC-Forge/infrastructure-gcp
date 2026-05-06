@@ -21,5 +21,7 @@ jobs:
           script: |
             cd /var/www/infrastructure
 
+            sudo chmod -R 777 /var/www/infrastructure/
+
             git fetch origin
             git reset --hard origin/main
