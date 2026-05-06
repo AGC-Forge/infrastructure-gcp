@@ -1,26 +1,42 @@
-FROM postgres:16-bookworm
+# docker/postgres/Dockerfile.postgres
+FROM arm64v8/postgres:16-alpine
 
-# Install packages untuk Debian
-RUN apt-get update && apt-get install -y \
-    vim nano \
+# Alpine pake apk, bukan apt-get
+RUN apk add --no-cache \
+    vim \
+    nano \
     postgresql-contrib \
-    postgresql-16-cron \
     net-tools \
-    iputils-ping \
+    iputils \
     htop \
     tree \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    tzdata \
+    && rm -rf /var/cache/apk/*
 
-# Setup custom config
+# Setup custom config directory
 RUN mkdir -p /etc/postgresql
+
+# Copy config files
 COPY docker/postgres/postgresql.conf /etc/postgresql/
 COPY docker/postgres/pg_hba.conf /etc/postgresql/
-RUN chown postgres:postgres /etc/postgresql/*.conf && chmod 600 /etc/postgresql/*.conf
+
+# Set ownership dan permission
+RUN chown -R postgres:postgres /etc/postgresql \
+    && chmod 600 /etc/postgresql/*.conf
 
 # Health check script
 COPY docker/postgres/healthcheck.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/healthcheck.sh
 
+# PostgreSQL akan membaca config dari sini
+ENV PGDATA=/var/lib/postgresql/data
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD /usr/local/bin/healthcheck.sh
+
+EXPOSE 5432
+
+CMD ["postgres", \
+     "-c", "config_file=/etc/postgresql/postgresql.conf", \
+     "-c", "hba_file=/etc/postgresql/pg_hba.conf"]

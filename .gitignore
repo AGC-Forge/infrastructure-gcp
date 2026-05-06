@@ -40,9 +40,6 @@ temp/
 Thumbs.db
 .DS_Store
 my-docs.txt
-nginx/frontend/simontokz-certificate.pem
-nginx/frontend/simontokz-private.key
-nginx/frontend/docs
 nginx
 
 # Generated local TLS material

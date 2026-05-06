@@ -1,29 +1,28 @@
 #!/bin/sh
+# docker/3proxy/entrypoint.sh
+set -e
 
-# Generate config from environment variables
+# Generate config dari environment variables
 cat > /etc/3proxy/3proxy.cfg << EOF
+nserver ${PRIMARY_RESOLVER:-8.8.8.8}
+nserver ${SECONDARY_RESOLVER:-1.1.1.1}
 nscache 65536
-timeouts 1 5 30 60 180 600 60 60
+
+timeouts 1 5 30 60 180 1800 15 60
+
 users ${PROXY_LOGIN:-admin}:CL:${PROXY_PASSWORD:-password}
+
 auth strong
 allow ${PROXY_LOGIN:-admin}
 
-# HTTP Proxy
-proxy -p${PROXY_PORT:-3129} -i0.0.0.0 -e0.0.0.0
+proxy -p${PROXY_PORT:-3129} -n -a
+socks -p${SOCKS_PORT:-1080} -n -a
 
-# SOCKS Proxy
-socks -p${SOCKS_PORT:-1080} -i0.0.0.0 -e0.0.0.0
+maxconn ${MAX_CONNECTIONS:-1024}
 
-# Logging
 log /var/log/3proxy/3proxy.log D
-logformat "- +_L%t.%. %N.%p %E %U %C:%c %R:%r %O %I %h %T"
-rotate 30
-flush
+logformat "L%d/%m/%Y %H:%M:%S %z %N %U %C %R %Q %e %E"
 EOF
 
-echo "=== 3proxy Configuration Generated ==="
-cat /etc/3proxy/3proxy.cfg
-echo "======================================"
-
-# Execute 3proxy
-exec "$@"
+echo "Starting 3proxy..."
+exec 3proxy /etc/3proxy/3proxy.cfg
