@@ -43,3 +43,4 @@ my-docs.txt
 nginx/frontend/simontokz-certificate.pem
 nginx/frontend/simontokz-private.key
 nginx/frontend/docs
+nginx
