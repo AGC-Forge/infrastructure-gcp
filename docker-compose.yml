@@ -189,7 +189,8 @@ services:
       - shared-network
     cap_add:
       - NET_ADMIN
-    entrypoint: ["/entrypoint.sh"]
+    user: root
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     command: ["3proxy", "/etc/3proxy/3proxy.cfg"]
     labels:
       - "traefik.enable=true"
@@ -537,7 +538,7 @@ services:
       - shared-network
     depends_on:
       - postfix
-      - dovecot
+      # - dovecot
 
   # Mail Antivirus & Spam Filter
   # rspamd:
@@ -594,7 +595,7 @@ volumes:
   pgadmin_data:
   supabase_storage_data:
   postfix_data:
-  dovecot_mail:
+  # dovecot_mail:
   postfixadmin_data:
   roundcube_data:
   roundcube_plugins:
