@@ -441,6 +441,8 @@ services:
     volumes:
       - postfix_data:/var/spool/postfix
       - ./docker/postfix/conf:/etc/postfix:ro
+      - ./docker/mail/tls/mailserver.crt:/etc/ssl/certs/mailserver.crt:ro
+      - ./docker/mail/tls/mailserver.key:/etc/ssl/private/mailserver.key:ro
     networks:
       - infrastructure-network
       - shared-network
@@ -459,6 +461,8 @@ services:
       - dovecot_mail:/var/mail
       - ./docker/dovecot/conf:/etc/dovecot:ro
       - ./docker/dovecot/dovecot-ssl.conf:/etc/dovecot/dovecot-ssl.conf:ro
+      - ./docker/mail/tls/mailserver.crt:/etc/ssl/certs/mailserver.crt:ro
+      - ./docker/mail/tls/mailserver.key:/etc/ssl/private/mailserver.key:ro
     ports:
       - "127.0.0.1:143:143"
       - "127.0.0.1:993:993"
